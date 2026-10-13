@@ -1,6 +1,11 @@
 // Talks to the Google Apps Script backend (Code.gs). API_URL is set in js/config.js
 function api(action,payload){
-return fetch(API_URL,{method:'POST',body:JSON.stringify(Object.assign({action},payload))}).then(r=>r.json())}
+const ctl=new AbortController(),t=setTimeout(()=>ctl.abort(),45000);
+return fetch(API_URL,{method:'POST',body:JSON.stringify(Object.assign({action},payload)),signal:ctl.signal,redirect:'follow'})
+.then(r=>r.text()).then(txt=>{clearTimeout(t);
+try{return JSON.parse(txt)}catch(x){throw {msg:'The server sent an unexpected reply. Check that config.js has the latest Apps Script link and that the deployment access is set to Anyone.'}}})
+.catch(x=>{clearTimeout(t);throw x})}
+function errMsg(x){return (x&&x.msg)||(x&&x.name==='AbortError'?'The server is taking too long to reply. Please try again.':'Network error. Check your internet and try again.')}
 const $=id=>document.getElementById(id);
 const st=$('state'),lg=$('lga');
 Object.keys(LGAS).sort().forEach(s=>st.add(new Option(s,s)));
@@ -29,7 +34,7 @@ er.textContent='';b.disabled=true;b.textContent='Checking...';
 api('check',{jamb:v,mode}).then(r=>{b.disabled=false;b.textContent='Continue';
 if(r.ok){JAMB=v;ENTRY=mode;$('loginPage').style.display='none';$('dePage').style.display='none';$('formPage').style.display='block';
 $('jambTag').textContent=(mode==='DE'?'Direct Entry | ':'')+'JAMB No: '+v;scrollTo(0,0)}else er.textContent=r.msg})
-.catch(()=>{b.disabled=false;b.textContent='Continue';er.textContent='Network error. Please try again.'})}}
+.catch(x=>{b.disabled=false;b.textContent='Continue';er.textContent=errMsg(x)})}}
 setupLogin('lf','jamb','jerr','lbtn','UTME');
 setupLogin('df','jambDe','derr','dbtn','DE');
 $('toDe').onclick=()=>{$('loginPage').style.display='none';$('dePage').style.display='block';scrollTo(0,0)};
@@ -66,11 +71,11 @@ function show(n){STEP=n;$('step1').style.display=n===1?'block':'none';$('step2')
 $('next').onclick=()=>{const d=collect();if(!d){$('top').textContent='Please correct the highlighted fields.';return}
 const b=$('next'),t='Next: Upload documents';b.disabled=true;b.textContent='Checking...';$('top').textContent='';
 api('precheck',{data:d}).then(r=>{b.disabled=false;b.textContent=t;if(r.ok)show(2);else $('top').textContent=r.msg})
-.catch(()=>{b.disabled=false;b.textContent=t;$('top').textContent='Network error. Please try again.'})};
+.catch(x=>{b.disabled=false;b.textContent=t;$('top').textContent=errMsg(x)})};
 $('back').onclick=()=>show(1);
 $('f').onsubmit=e=>{e.preventDefault();if(STEP===1){$('next').click();return}
 const d=collect();if(!d){show(1);$('top').textContent='Please correct the highlighted fields.';return}
 if(!checkFiles()){$('top').textContent='Please upload all eight documents.';return}
 $('top').textContent='';$('btn').disabled=true;$('btn').textContent='Submitting...';
 sendAll(d).then(()=>{$('f').style.display='none';$('done').style.display='block';scrollTo(0,0)})
-.catch(e=>{$('top').textContent=(e&&e.msg)||'Network error. Please try again.';$('btn').disabled=false;$('btn').textContent='Submit registration'})};
+.catch(e=>{$('top').textContent=errMsg(e);$('btn').disabled=false;$('btn').textContent='Submit registration'})};
